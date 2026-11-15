@@ -1,0 +1,23 @@
+name: Close on label
+
+# Closes an issue or pull request when someone adds the label by hand. Labels added by the self-test workflow
+# use GITHUB_TOKEN and do not trigger this workflow; that workflow closes the item itself.
+on:
+  issues:
+    types: [labeled]
+  pull_request_target:
+    types: [labeled]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  close:
+    if: github.event.label.name == 'suspicious-hidden-content'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dwertent/close-on-labels@22dbe6c77cb4a56bcda4a56357103043194fc30f # v1.0.0
+        with:
+          labels: suspicious-hidden-content
+          comment: 'Closing because this was labeled {{matched}}.'
