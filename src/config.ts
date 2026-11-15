@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { Severity } from './types.js'
+import { KNOWN_BOTS } from './bots.js'
 import { SEVERITIES } from './types.js'
 
 export interface Config {
@@ -20,6 +21,7 @@ export interface Config {
   maxCommentLength: number
   exemptUsers: string[]
   exemptAuthorAssociations: string[]
+  trustedBots: string[]
   failOnDetection: boolean
 }
 
@@ -109,6 +111,14 @@ export function readConfig(io: InputReader): Config {
     )
   }
 
+  const trustedBots = list('trusted-bots').map((b) => b.toLowerCase())
+  const unsupported = trustedBots.filter((b) => !(b in KNOWN_BOTS))
+  if (unsupported.length > 0) {
+    throw new ConfigError(
+      `Input "trusted-bots" has unsupported value(s) ${unsupported.join(', ')}; supported bots: ${Object.keys(KNOWN_BOTS).join(', ')}.`
+    )
+  }
+
   const config: Config = {
     token,
     addLabel: bool('add-label', true),
@@ -126,6 +136,7 @@ export function readConfig(io: InputReader): Config {
     maxCommentLength: int('max-comment-length', 200),
     exemptUsers: list('exempt-users').map((u) => u.toLowerCase()),
     exemptAuthorAssociations,
+    trustedBots,
     failOnDetection: bool('fail-on-detection', false)
   }
   return config

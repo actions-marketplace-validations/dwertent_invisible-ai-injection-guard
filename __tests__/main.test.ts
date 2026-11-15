@@ -219,3 +219,55 @@ describe('run', () => {
     expect(/[\p{Cf}]/u.test(body)).toBe(false)
   })
 })
+
+describe('trusted bots and exemptions', () => {
+  const MARKERS = "Bumps a dependency.\n\n[//]: # 'dependabot-automerge-start'\n[//]: # 'dependabot-automerge-end'\n"
+  const LOW = { ...TOKEN, 'min-severity': 'low', 'trusted-bots': 'dependabot[bot]', comment: 'false' }
+
+  function prEvent(body: string, user: Record<string, unknown>, sender: string) {
+    return {
+      eventName: 'pull_request_target',
+      repo: { owner: 'acme', repo: 'widgets' },
+      payload: {
+        action: 'edited',
+        sender: { login: sender },
+        pull_request: { number: 9, title: 'Bump x', body, state: 'open', labels: [], user }
+      }
+    }
+  }
+  const dependabot = { login: 'dependabot[bot]', type: 'Bot' }
+
+  it('allows the markers of a trusted bot', async () => {
+    const { core, outputs, mock } = fakeCore(LOW)
+    await run(deps(prEvent(MARKERS, dependabot, 'dependabot[bot]'), core, fakeOctokit().octokit))
+    expect(outputs['detected']).toBe('false')
+    expect(mock.info).toHaveBeenCalledWith(expect.stringContaining('trusted bot "dependabot[bot]"'))
+  })
+
+  it('still reports other hidden content from a trusted bot', async () => {
+    const { core, outputs } = fakeCore(LOW)
+    const body = `${MARKERS}\n<!-- copied from release notes -->\n`
+    await run(deps(prEvent(body, dependabot, 'dependabot[bot]'), core, fakeOctokit().octokit))
+    const findings = JSON.parse(outputs['findings'] ?? '[]') as { rule: string }[]
+    expect(findings.map((f) => f.rule)).toEqual(['html-comment'])
+  })
+
+  it.each([
+    ['someone else edited the text', dependabot, 'mallory'],
+    ['the author is a user account', { login: 'dependabot[bot]', type: 'User' }, 'dependabot[bot]'],
+    ['the login is not a bot login', { login: 'dependabot', type: 'Bot' }, 'dependabot']
+  ])('does not trust the bot when %s', async (_, user, sender) => {
+    const { core, outputs } = fakeCore({ ...LOW, 'trusted-bots': 'dependabot[bot]' })
+    await run(deps(prEvent(MARKERS, user, sender), core, fakeOctokit().octokit))
+    expect(outputs['count']).toBe('2')
+  })
+
+  it("scans an exempt author's text when someone else edited it", async () => {
+    const { core, outputs } = fakeCore({ ...TOKEN, 'exempt-users': 'alice', comment: 'false' })
+    const context = issueEvent(MALICIOUS, { user: { login: 'alice' } }, 'edited')
+    await run(
+      deps({ ...context, payload: { ...context.payload, sender: { login: 'mallory' } } }, core, fakeOctokit().octokit)
+    )
+    expect(outputs['detected']).toBe('true')
+  })
+})

@@ -1,0 +1,63 @@
+name: Merge Dependabot security updates
+
+# Once a week, merges open Dependabot security update pull requests whose required checks have passed.
+# The branch ruleset on main also requires those checks, so a pull request with a failing or pending
+# check cannot be merged by this workflow or by anyone else.
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # merge pull requests
+      pull-requests: write # merge pull requests
+      actions: write # start CI on main after merging
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      FLAG_LABEL: suspicious-hidden-content
+    steps:
+      - name: Merge passing security updates
+        run: |
+          set -euo pipefail
+          merged=0
+          prs=$(gh pr list --author app/dependabot --state open --limit 100 \
+            --json number,headRefName,headRefOid,isDraft,labels \
+            --jq '.[] | select(.headRefName | test("^dependabot/[^/]+/security-")) | select(.isDraft | not)
+                  | select([.labels[].name] | index(env.FLAG_LABEL) | not) | "\(.number) \(.headRefOid)"')
+          if [ -z "$prs" ]; then
+            echo "No open Dependabot security updates."
+            exit 0
+          fi
+          while read -r -u 3 number sha; do
+            # Someone with write access could push to a Dependabot branch; only merge Dependabot's own commits.
+            others=$(gh api "repos/$GH_REPO/pulls/$number/commits" --paginate \
+              --jq '.[] | select(.author.login != "dependabot[bot]") | .sha')
+            if [ -n "$others" ]; then
+              echo "::warning::#$number has commits not authored by Dependabot; skipping."
+              continue
+            fi
+            if ! gh pr checks "$number" --required > /dev/null 2>&1; then
+              echo "#$number: required checks have not all passed; skipping."
+              continue
+            fi
+            # --match-head-commit fails if the branch changed after the checks above.
+            if gh pr merge "$number" --squash --match-head-commit "$sha"; then
+              echo "Merged #$number."
+              merged=$((merged + 1))
+            else
+              echo "::warning::Could not merge #$number."
+            fi
+          done 3<<< "$prs"
+          # Pushes made with GITHUB_TOKEN do not trigger workflows, so start CI on main explicitly.
+          if [ "$merged" -gt 0 ]; then
+            gh workflow run ci.yml --ref "${{ github.event.repository.default_branch }}"
+          fi

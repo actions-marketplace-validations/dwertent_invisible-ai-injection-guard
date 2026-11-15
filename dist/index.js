@@ -26363,6 +26363,17 @@ function getOctokit(token, options, ...additionalPlugins) {
   return new GitHubWithPlugins(getOctokitOptions(token, options));
 }
 
+// src/bots.ts
+var NO_MARKERS = { html: [], markdown: [] };
+var KNOWN_BOTS = {
+  // e.g. `[//]: # (dependabot-automerge-start)`
+  "dependabot[bot]": { html: [], markdown: [/^dependabot-[a-z]+(?:-[a-z]+)*$/u] }
+};
+function markersFor(logins) {
+  const bots = logins.map((login) => KNOWN_BOTS[login] ?? NO_MARKERS);
+  return { html: bots.flatMap((b) => b.html), markdown: bots.flatMap((b) => b.markdown) };
+}
+
 // src/types.ts
 var SEVERITIES = ["low", "medium", "high"];
 var SEVERITY_RANK = {
@@ -26448,6 +26459,13 @@ function readConfig(io) {
       `Input "exempt-author-associations" has unknown value(s) ${unknown.join(", ")}; expected any of ${AUTHOR_ASSOCIATIONS.join(", ")}.`
     );
   }
+  const trustedBots = list("trusted-bots").map((b) => b.toLowerCase());
+  const unsupported = trustedBots.filter((b) => !(b in KNOWN_BOTS));
+  if (unsupported.length > 0) {
+    throw new ConfigError(
+      `Input "trusted-bots" has unsupported value(s) ${unsupported.join(", ")}; supported bots: ${Object.keys(KNOWN_BOTS).join(", ")}.`
+    );
+  }
   const config = {
     token,
     addLabel: bool("add-label", true),
@@ -26465,6 +26483,7 @@ function readConfig(io) {
     maxCommentLength: int("max-comment-length", 200),
     exemptUsers: list("exempt-users").map((u) => u.toLowerCase()),
     exemptAuthorAssociations,
+    trustedBots,
     failOnDetection: bool("fail-on-detection", false)
   };
   return config;
@@ -26673,6 +26692,7 @@ function detectHtmlComments(masked, options) {
     }
     const trimmed = content.trim();
     if (trimmed === "" || options.ignoredSnippets.has(normalizeSnippet(trimmed))) continue;
+    if (options.allowedMarkers.html.some((p) => p.test(trimmed))) continue;
     const { severity, signals } = classify(trimmed, options, "low");
     findings.push({
       rule: "html-comment",
@@ -26703,6 +26723,7 @@ function detectMarkdownComments(masked, options) {
   const findings = [];
   for (const { index, content } of extractMarkdownComments(masked)) {
     if (options.ignoredSnippets.has(normalizeSnippet(content))) continue;
+    if (options.allowedMarkers.markdown.some((p) => p.test(content))) continue;
     const { severity, signals } = classify(content, options, "low");
     findings.push({
       rule: "markdown-comment",
@@ -26931,6 +26952,8 @@ function resolveTarget(context3) {
       title: subject.type === "description" ? str(parent, "title") : "",
       body: str(source, "body"),
       author: str(user, "login"),
+      authorType: str(user, "type"),
+      sender: str(obj(payload["sender"]) ?? {}, "login"),
       authorAssociation: str(source, "author_association")
     }
   };
@@ -27285,6 +27308,7 @@ var DEFAULT_SCAN_OPTIONS = {
   maxBlankLines: 30,
   maxCommentLength: 200,
   ignoredSnippets: /* @__PURE__ */ new Set(),
+  allowedMarkers: NO_MARKERS,
   maxFindingsPerRule: 25
 };
 function scanField(text, field, options = DEFAULT_SCAN_OPTIONS) {
@@ -27292,7 +27316,11 @@ function scanField(text, field, options = DEFAULT_SCAN_OPTIONS) {
   const raw = [...detectUnicode(text)];
   if (field !== "title") {
     const masked = maskCode(text);
-    const markup = { maxCommentLength: options.maxCommentLength, ignoredSnippets: options.ignoredSnippets };
+    const markup = {
+      maxCommentLength: options.maxCommentLength,
+      ignoredSnippets: options.ignoredSnippets,
+      allowedMarkers: options.allowedMarkers
+    };
     raw.push(
       ...detectHtmlComments(masked, markup),
       ...detectMarkdownComments(masked, markup),
@@ -27371,6 +27399,8 @@ async function execute(deps) {
     return { findings: [], actions: [] };
   }
   const octokit = deps.getOctokit(config.token);
+  const trustedBot = trustedBotOf(config, target);
+  if (trustedBot) io.info(`Allowing the known markers of trusted bot "${trustedBot}"; everything else is scanned.`);
   let ignoredSnippets = /* @__PURE__ */ new Set();
   if (config.ignoreTemplateComments && !isComment) {
     try {
@@ -27385,7 +27415,8 @@ async function execute(deps) {
       ...DEFAULT_SCAN_OPTIONS,
       maxBlankLines: config.maxBlankLines,
       maxCommentLength: config.maxCommentLength,
-      ignoredSnippets
+      ignoredSnippets,
+      allowedMarkers: trustedBot ? markersFor([trustedBot]) : NO_MARKERS
     },
     isComment ? "comment" : "body"
   );
@@ -27460,8 +27491,16 @@ async function execute(deps) {
   }
   return { findings, actions };
 }
+function writtenByAuthor(target) {
+  return target.sender === "" || target.sender.toLowerCase() === target.author.toLowerCase();
+}
 function isExempt(config, target) {
-  return config.exemptUsers.includes(target.author.toLowerCase()) || config.exemptAuthorAssociations.includes(target.authorAssociation.toUpperCase());
+  return writtenByAuthor(target) && (config.exemptUsers.includes(target.author.toLowerCase()) || config.exemptAuthorAssociations.includes(target.authorAssociation.toUpperCase()));
+}
+function trustedBotOf(config, target) {
+  const login = target.author.toLowerCase();
+  if (target.authorType !== "Bot" || !login.endsWith("[bot]") || !writtenByAuthor(target)) return void 0;
+  return config.trustedBots.includes(login) ? login : void 0;
 }
 function setOutputs(io, findings) {
   io.setOutput("detected", findings.length > 0 ? "true" : "false");

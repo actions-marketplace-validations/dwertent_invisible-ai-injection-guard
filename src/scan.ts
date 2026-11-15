@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+import type { BotMarkers } from './bots.js'
+import { NO_MARKERS } from './bots.js'
 import { detectHiddenHtml, detectHtmlComments, detectMarkdownComments } from './detectors/markup.js'
 import { detectPadding } from './detectors/padding.js'
 import { detectUnicode } from './detectors/unicode.js'
@@ -11,6 +13,7 @@ export interface ScanOptions {
   maxBlankLines: number
   maxCommentLength: number
   ignoredSnippets: ReadonlySet<string>
+  allowedMarkers: BotMarkers
   /** Findings of one rule beyond this count are folded into a single summary finding. */
   maxFindingsPerRule: number
 }
@@ -19,6 +22,7 @@ export const DEFAULT_SCAN_OPTIONS: ScanOptions = {
   maxBlankLines: 30,
   maxCommentLength: 200,
   ignoredSnippets: new Set(),
+  allowedMarkers: NO_MARKERS,
   maxFindingsPerRule: 25
 }
 
@@ -28,7 +32,11 @@ export function scanField(text: string, field: Field, options: ScanOptions = DEF
   const raw: DetectorFinding[] = [...detectUnicode(text)]
   if (field !== 'title') {
     const masked = maskCode(text)
-    const markup = { maxCommentLength: options.maxCommentLength, ignoredSnippets: options.ignoredSnippets }
+    const markup = {
+      maxCommentLength: options.maxCommentLength,
+      ignoredSnippets: options.ignoredSnippets,
+      allowedMarkers: options.allowedMarkers
+    }
     raw.push(
       ...detectHtmlComments(masked, markup),
       ...detectMarkdownComments(masked, markup),

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+import type { BotMarkers } from '../bots.js'
 import { escapeForDisplay, normalizeSnippet } from '../text.js'
 import type { DetectorFinding, Severity } from '../types.js'
 import { injectionSignals } from './injection.js'
@@ -9,6 +10,8 @@ export interface MarkupOptions {
   maxCommentLength: number
   /** Normalized hidden snippets (e.g. from repository templates) that are allowed. */
   ignoredSnippets: ReadonlySet<string>
+  /** Markers written by trusted bots, allowed only when the text was written by that bot. */
+  allowedMarkers: BotMarkers
 }
 
 function classify(content: string, options: MarkupOptions, base: Severity): { severity: Severity; signals: string[] } {
@@ -77,6 +80,7 @@ export function detectHtmlComments(masked: string, options: MarkupOptions): Dete
     }
     const trimmed = content.trim()
     if (trimmed === '' || options.ignoredSnippets.has(normalizeSnippet(trimmed))) continue
+    if (options.allowedMarkers.html.some((p) => p.test(trimmed))) continue
     const { severity, signals } = classify(trimmed, options, 'low')
     findings.push({
       rule: 'html-comment',
@@ -114,6 +118,7 @@ export function detectMarkdownComments(masked: string, options: MarkupOptions): 
   const findings: DetectorFinding[] = []
   for (const { index, content } of extractMarkdownComments(masked)) {
     if (options.ignoredSnippets.has(normalizeSnippet(content))) continue
+    if (options.allowedMarkers.markdown.some((p) => p.test(content))) continue
     // Short notes are common (e.g. Dependabot's `[//]: # (dependabot-automerge-start)` markers),
     // so these are rated like HTML comments.
     const { severity, signals } = classify(content, options, 'low')

@@ -25,6 +25,7 @@ describe('readConfig', () => {
       maxCommentLength: 200,
       exemptUsers: [],
       exemptAuthorAssociations: [],
+      trustedBots: [],
       failOnDetection: false
     })
   })
@@ -40,7 +41,8 @@ describe('readConfig', () => {
         'min-severity': 'HIGH',
         'max-blank-lines': '10',
         'exempt-users': 'Alice, bob',
-        'exempt-author-associations': 'owner,member'
+        'exempt-author-associations': 'owner,member',
+        'trusted-bots': 'Dependabot[bot]'
       })
     )
     expect(config).toMatchObject({
@@ -51,7 +53,8 @@ describe('readConfig', () => {
       minSeverity: 'high',
       maxBlankLines: 10,
       exemptUsers: ['alice', 'bob'],
-      exemptAuthorAssociations: ['OWNER', 'MEMBER']
+      exemptAuthorAssociations: ['OWNER', 'MEMBER'],
+      trustedBots: ['dependabot[bot]']
     })
   })
 
@@ -63,7 +66,8 @@ describe('readConfig', () => {
     [{ label: 'x'.repeat(51) }, /label/u],
     [{ 'max-blank-lines': '-1' }, /max-blank-lines/u],
     [{ 'exempt-author-associations': 'ADMIN' }, /ADMIN/u],
-    [{ 'hide-comment-reason': 'rude' }, /hide-comment-reason/u]
+    [{ 'hide-comment-reason': 'rude' }, /hide-comment-reason/u],
+    [{ 'trusted-bots': 'evil[bot]' }, /trusted-bots.*dependabot\[bot\]/u]
   ])('rejects invalid input %j', (inputs, message) => {
     const token = 'github-token' in inputs || Object.keys(inputs).length === 0 ? {} : { 'github-token': 't' }
     expect(() => readConfig(reader({ ...token, ...inputs }))).toThrow(ConfigError)

@@ -5,6 +5,11 @@ updates:
     schedule:
       interval: weekly
     groups:
+      # Security updates go to branches named dependabot/<ecosystem>/security-<hash>. The weekly
+      # merge workflow only merges those branches.
+      security:
+        applies-to: security-updates
+        patterns: ['*']
       dev-dependencies:
         dependency-type: development
       actions-toolkit:
@@ -13,3 +18,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      security:
+        applies-to: security-updates
+        patterns: ['*']

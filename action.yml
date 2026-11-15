@@ -48,11 +48,20 @@ inputs:
   max-comment-length:
     description: HTML comments longer than this many characters are reported as medium severity instead of low.
     default: '200'
+  trusted-bots:
+    description: >-
+      Comma- or newline-separated bot logins (for example "dependabot[bot]") whose own hidden markers are allowed.
+      Their text is still scanned for anything else. Only applies when the bot wrote the text itself.
+    default: ''
   exempt-users:
-    description: Comma- or newline-separated logins whose issues and pull requests are not scanned.
+    description: >-
+      Comma- or newline-separated logins whose issues and pull requests are not scanned. Edits by anyone else are
+      still scanned.
     default: ''
   exempt-author-associations:
-    description: Comma-separated author associations that are not scanned, for example "OWNER,MEMBER".
+    description: >-
+      Comma-separated author associations that are not scanned, for example "OWNER,MEMBER". Edits by anyone else
+      are still scanned.
     default: ''
   fail-on-detection:
     description: Fail the workflow step when hidden content is detected.

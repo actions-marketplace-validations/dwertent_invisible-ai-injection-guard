@@ -101,6 +101,29 @@ If the comment is later edited to remove the hidden content, its report is marke
     comment: false
 ```
 
+### Trusted bots
+
+Some bots write hidden markers into their own text, for example Dependabot's
+`[//]: # (dependabot-automerge-start)`. List them in `trusted-bots` to allow those markers:
+
+```yaml
+- uses: dwertent/invisible-ai-injection-guard@v1
+  with:
+    trusted-bots: dependabot[bot]
+```
+
+A trusted bot is **not** exempt from scanning:
+
+- Only that bot's known markers are allowed, matched by narrow patterns. Anything else hidden in its text is still
+  reported. This matters because Dependabot copies release notes and changelogs from the dependency into the pull
+  request, so a malicious or compromised package can hide instructions there.
+- The author must be a GitHub App account (`Bot` type with a login ending in `[bot]`). User names cannot contain
+  brackets, so nobody can register `dependabot[bot]`, and the login comes from GitHub, not from the text.
+- The bot must also be the account that triggered the event. If someone else edits the bot's text, the markers are
+  reported like any other hidden content.
+
+Supported bots: `dependabot[bot]`.
+
 ### Close flagged items in a separate job
 
 Closing is not part of this action. To close flagged items automatically, run a second job that reads the action's
@@ -189,8 +212,9 @@ jobs:
 | `ignore-template-comments`   | `true`                                       | Ignore comments that also appear in the repository's (or the owner's `.github` repository's) issue/PR templates. |
 | `max-blank-lines`            | `30`                                         | Visually empty lines allowed before following content is reported as padding.                                    |
 | `max-comment-length`         | `200`                                        | HTML comments longer than this are medium instead of low severity.                                               |
-| `exempt-users`               | _(empty)_                                    | Comma- or newline-separated logins that are not scanned.                                                         |
-| `exempt-author-associations` | _(empty)_                                    | Author associations that are not scanned, for example `OWNER,MEMBER`.                                            |
+| `trusted-bots`               | _(empty)_                                    | Bots whose own hidden markers are allowed; their text is still scanned. See [Trusted bots](#trusted-bots).       |
+| `exempt-users`               | _(empty)_                                    | Comma- or newline-separated logins that are not scanned. Edits by anyone else are still scanned.                 |
+| `exempt-author-associations` | _(empty)_                                    | Author associations that are not scanned, for example `OWNER,MEMBER`. Edits by anyone else are still scanned.    |
 | `fail-on-detection`          | `false`                                      | Fail the step when hidden content is detected.                                                                   |
 
 ## Outputs
@@ -207,14 +231,15 @@ Findings are also written as workflow annotations and to the job summary.
 ## Security notes
 
 - **Use `pull_request_target` for pull requests.** Under `pull_request`, pull requests from forks receive a
-  read-only token, so labeling, commenting and closing fail. This action never checks out or runs code from the
+  read-only token, so labeling and commenting fail. This action never checks out or runs code from the
   pull request, so it is safe to run under `pull_request_target`. Do not add a step that checks out the pull
   request's head in the same job.
 - **Evidence is never echoed verbatim.** The report comment describes findings by rule, code point and location.
   Excerpts are escaped (invisible characters are shown as `\u{…}`) and truncated, so the comment cannot itself
   smuggle the payload. Set `show-evidence: false` to omit excerpts entirely.
 - **Exemptions are opt-in.** Nothing is exempt by default, because trusted accounts can be compromised and
-  descriptions can be pasted from untrusted sources.
+  descriptions can be pasted from untrusted sources. An exemption only applies when the author triggered the event,
+  so text edited by someone else is always scanned. Prefer `trusted-bots` over `exempt-users` for bots.
 - **Detection is not prevention.** Treat issue and pull request text as untrusted input in any workflow that gives
   an AI agent access to secrets or write permissions, whether or not this action reports anything.
 

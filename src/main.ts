@@ -7,6 +7,7 @@ import { ConfigError, readConfig } from './config.js'
 import type { EventContext, Octokit, Target } from './github.js'
 import { addLabel, findReportComment, hideComment, removeLabel, resolveTarget, upsertReportComment } from './github.js'
 import { buildReportComment, buildResolvedComment, formatFinding, formatLocation } from './report.js'
+import { markersFor, NO_MARKERS } from './bots.js'
 import { DEFAULT_SCAN_OPTIONS, scan } from './scan.js'
 import { loadTemplateSnippets, messageOf, statusOf } from './templates.js'
 import type { Finding } from './types.js'
@@ -76,6 +77,9 @@ async function execute(deps: Dependencies): Promise<RunResult | undefined> {
 
   const octokit = deps.getOctokit(config.token)
 
+  const trustedBot = trustedBotOf(config, target)
+  if (trustedBot) io.info(`Allowing the known markers of trusted bot "${trustedBot}"; everything else is scanned.`)
+
   let ignoredSnippets: Set<string> = new Set()
   // Templates only seed titles and descriptions, so they are not consulted for comments.
   if (config.ignoreTemplateComments && !isComment) {
@@ -92,7 +96,8 @@ async function execute(deps: Dependencies): Promise<RunResult | undefined> {
       ...DEFAULT_SCAN_OPTIONS,
       maxBlankLines: config.maxBlankLines,
       maxCommentLength: config.maxCommentLength,
-      ignoredSnippets
+      ignoredSnippets,
+      allowedMarkers: trustedBot ? markersFor([trustedBot]) : NO_MARKERS
     },
     isComment ? 'comment' : 'body'
   )
@@ -172,11 +177,27 @@ async function execute(deps: Dependencies): Promise<RunResult | undefined> {
   return { findings, actions }
 }
 
+/**
+ * Whether the text was last written by its author. When someone else edits it (the event's sender differs),
+ * the author's exemption or trust does not apply. Real events always have a sender.
+ */
+function writtenByAuthor(target: Target): boolean {
+  return target.sender === '' || target.sender.toLowerCase() === target.author.toLowerCase()
+}
+
 function isExempt(config: Config, target: Target): boolean {
   return (
-    config.exemptUsers.includes(target.author.toLowerCase()) ||
-    config.exemptAuthorAssociations.includes(target.authorAssociation.toUpperCase())
+    writtenByAuthor(target) &&
+    (config.exemptUsers.includes(target.author.toLowerCase()) ||
+      config.exemptAuthorAssociations.includes(target.authorAssociation.toUpperCase()))
   )
+}
+
+/** Returns the trusted bot that wrote the text, if any. Logins ending in `[bot]` can only belong to GitHub Apps. */
+function trustedBotOf(config: Config, target: Target): string | undefined {
+  const login = target.author.toLowerCase()
+  if (target.authorType !== 'Bot' || !login.endsWith('[bot]') || !writtenByAuthor(target)) return undefined
+  return config.trustedBots.includes(login) ? login : undefined
 }
 
 function setOutputs(io: Core, findings: Finding[]): void {

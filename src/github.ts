@@ -26,6 +26,10 @@ export interface Target {
   body: string
   /** Author of the scanned text. */
   author: string
+  /** Account type of the author, e.g. `User` or `Bot`. */
+  authorType: string
+  /** Account that triggered the event; differs from the author when someone else edited the text. */
+  sender: string
   authorAssociation: string
   labels: string[]
 }
@@ -138,6 +142,8 @@ export function resolveTarget(context: EventContext): ResolveResult {
       title: subject.type === 'description' ? str(parent, 'title') : '',
       body: str(source, 'body'),
       author: str(user, 'login'),
+      authorType: str(user, 'type'),
+      sender: str(obj(payload['sender']) ?? {}, 'login'),
       authorAssociation: str(source, 'author_association')
     }
   }

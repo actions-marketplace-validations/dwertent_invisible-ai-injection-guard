@@ -3,6 +3,19 @@
 All notable changes to this project are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-11-15
+
+### Added
+
+- `trusted-bots` to allow the known hidden markers of listed bots (currently `dependabot[bot]`). The bot's text is
+  still scanned for anything else, and the markers are only allowed when the bot is the author and also triggered
+  the event.
+
+### Changed
+
+- `exempt-users` and `exempt-author-associations` no longer apply when someone other than the author edits the
+  text; those edits are scanned.
+
 ## [1.2.0] - 2026-11-14
 
 ### Removed

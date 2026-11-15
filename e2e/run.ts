@@ -77,47 +77,39 @@ export function buildEvent(c: Case): { eventName: string; payload: Record<string
   const title = decode(c.meta['title'] ?? 'Example')
   const author = { login: c.meta['author'] ?? 'contributor', type: c.meta['author-type'] ?? 'User' }
   const association = c.meta['association'] ?? 'NONE'
+  // The account that triggered the event; set it to simulate someone else editing the text.
+  const sender = { login: c.meta['sender'] ?? author.login }
   const item = { number: 42, title, state: 'open', labels: [], user: { login: 'reporter', type: 'User' } }
   const comment = { id: 1001, node_id: 'IC_e2e', html_url: 'https://github.com/e2e/repo/issues/42#issuecomment-1001' }
 
+  const event = eventPayload(eventName, action, body, author, association, item, comment)
+  return { eventName, payload: { ...event, sender } }
+}
+
+function eventPayload(
+  eventName: string,
+  action: string,
+  body: string,
+  author: Record<string, string>,
+  association: string,
+  item: Record<string, unknown>,
+  comment: Record<string, unknown>
+): Record<string, unknown> {
+  const written = { body, user: author, author_association: association }
   switch (eventName) {
     case 'issues':
-      return { eventName, payload: { action, issue: { ...item, body, user: author, author_association: association } } }
+      return { action, issue: { ...item, ...written } }
     case 'pull_request':
     case 'pull_request_target':
-      return {
-        eventName,
-        payload: { action, pull_request: { ...item, body, user: author, author_association: association } }
-      }
+      return { action, pull_request: { ...item, ...written } }
     case 'issue_comment':
-      return {
-        eventName,
-        payload: {
-          action,
-          issue: { ...item, body: '' },
-          comment: { ...comment, body, user: author, author_association: association }
-        }
-      }
+      return { action, issue: { ...item, body: '' }, comment: { ...comment, ...written } }
     case 'pull_request_review_comment':
-      return {
-        eventName,
-        payload: {
-          action,
-          pull_request: item,
-          comment: { ...comment, body, user: author, author_association: association }
-        }
-      }
+      return { action, pull_request: item, comment: { ...comment, ...written } }
     case 'pull_request_review':
-      return {
-        eventName,
-        payload: {
-          action,
-          pull_request: item,
-          review: { ...comment, body, user: author, author_association: association }
-        }
-      }
+      return { action, pull_request: item, review: { ...comment, ...written } }
     default:
-      return { eventName, payload: { action } }
+      return { action }
   }
 }
 
