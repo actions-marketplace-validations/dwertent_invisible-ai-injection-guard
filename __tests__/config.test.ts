@@ -14,8 +14,6 @@ describe('readConfig', () => {
       label: 'suspicious-hidden-content',
       labelColor: 'b60205',
       labelDescription: 'Contains content hidden from human readers',
-      close: false,
-      closeOnComment: false,
       hideComment: true,
       hideCommentReason: 'SPAM',
       comment: true,
@@ -36,7 +34,7 @@ describe('readConfig', () => {
       reader({
         'github-token': 't',
         'add-label': 'no',
-        close: 'True',
+        'remove-label-when-clean': 'False',
         label: 'prompt-injection',
         'label-color': '#00FF00',
         'min-severity': 'HIGH',
@@ -47,7 +45,7 @@ describe('readConfig', () => {
     )
     expect(config).toMatchObject({
       addLabel: false,
-      close: true,
+      removeLabelWhenClean: false,
       label: 'prompt-injection',
       labelColor: '00ff00',
       minSeverity: 'high',
@@ -59,7 +57,7 @@ describe('readConfig', () => {
 
   it.each([
     [{}, /github-token/u],
-    [{ close: 'maybe' }, /close/u],
+    [{ 'add-label': 'maybe' }, /add-label/u],
     [{ 'min-severity': 'critical' }, /min-severity/u],
     [{ 'label-color': 'red' }, /label-color/u],
     [{ label: 'x'.repeat(51) }, /label/u],

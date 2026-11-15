@@ -136,8 +136,6 @@ const OFFLINE_INPUTS: Record<string, string> = {
   'github-token': 'e2e-fake-token',
   'add-label': 'false',
   comment: 'false',
-  close: 'false',
-  'close-on-comment': 'false',
   'hide-comment': 'false',
   'ignore-template-comments': 'false'
 }

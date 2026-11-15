@@ -27,8 +27,6 @@ export interface Target {
   /** Author of the scanned text. */
   author: string
   authorAssociation: string
-  /** State of the issue or pull request. */
-  state: string
   labels: string[]
 }
 
@@ -108,7 +106,6 @@ export function resolveTarget(context: EventContext): ResolveResult {
     owner: context.repo.owner,
     repo: context.repo.repo,
     number: Number(parent['number']),
-    state: str(parent, 'state', 'open'),
     labels: labels
       .map((l) => (typeof l === 'string' ? l : obj(l)?.['name']))
       .filter((l): l is string => typeof l === 'string')
@@ -174,21 +171,6 @@ export async function removeLabel(octokit: Octokit, target: Target, name: string
   } catch (error) {
     if (statusOf(error) === 404) return false
     throw error
-  }
-}
-
-export async function close(octokit: Octokit, target: Target): Promise<void> {
-  const { owner, repo, number } = target
-  if (target.kind === 'issue') {
-    await octokit.rest.issues.update({
-      owner,
-      repo,
-      issue_number: number,
-      state: 'closed',
-      state_reason: 'not_planned'
-    })
-  } else {
-    await octokit.rest.pulls.update({ owner, repo, pull_number: number, state: 'closed' })
   }
 }
 

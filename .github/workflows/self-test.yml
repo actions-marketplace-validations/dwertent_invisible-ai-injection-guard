@@ -32,7 +32,6 @@ jobs:
         uses: ./
         with:
           label: suspicious-hidden-content
-          close: true
       - name: Show outputs
         env:
           DETECTED: ${{ steps.guard.outputs.detected }}

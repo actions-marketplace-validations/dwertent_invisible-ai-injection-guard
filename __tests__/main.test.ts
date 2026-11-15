@@ -30,7 +30,6 @@ describe('run', () => {
       expect.objectContaining({ name: 'suspicious-hidden-content', color: 'b60205' })
     )
     expect(rest.issues.addLabels).toHaveBeenCalledWith(expect.objectContaining({ issue_number: 7 }))
-    expect(rest.issues.update).not.toHaveBeenCalled()
     expect(state.comments).toHaveLength(1)
     expect(state.comments[0]?.body).toContain(REPORT_MARKER)
     expect(state.comments[0]?.body).toContain('added label `suspicious-hidden-content`')
@@ -47,18 +46,8 @@ describe('run', () => {
     expect(rest.issues.createComment).not.toHaveBeenCalled()
   })
 
-  it('closes without labeling when configured', async () => {
-    const { core } = fakeCore({ ...TOKEN, 'add-label': 'false', close: 'true', comment: 'false' })
-    const { octokit, rest } = fakeOctokit()
-    await run(deps(issueEvent(MALICIOUS), core, octokit))
-    expect(rest.issues.addLabels).not.toHaveBeenCalled()
-    expect(rest.issues.update).toHaveBeenCalledWith(
-      expect.objectContaining({ issue_number: 7, state: 'closed', state_reason: 'not_planned' })
-    )
-  })
-
-  it('labels and closes a pull request', async () => {
-    const { core } = fakeCore({ ...TOKEN, close: 'true' })
+  it('labels a pull request', async () => {
+    const { core } = fakeCore(TOKEN)
     const { octokit, rest, state } = fakeOctokit()
     const context = {
       eventName: 'pull_request_target',
@@ -77,15 +66,7 @@ describe('run', () => {
     }
     await run(deps(context, core, octokit))
     expect(rest.issues.addLabels).toHaveBeenCalledWith(expect.objectContaining({ issue_number: 9 }))
-    expect(rest.pulls.update).toHaveBeenCalledWith(expect.objectContaining({ pull_number: 9, state: 'closed' }))
-    expect(state.comments[0]?.body).toContain('closed this pull request')
-  })
-
-  it('does not close an item that is already closed', async () => {
-    const { core } = fakeCore({ ...TOKEN, close: 'true' })
-    const { octokit, rest } = fakeOctokit()
-    await run(deps(issueEvent(MALICIOUS, { state: 'closed' }), core, octokit))
-    expect(rest.issues.update).not.toHaveBeenCalled()
+    expect(state.comments[0]?.body).toContain('added label `suspicious-hidden-content`')
   })
 
   it('updates its existing report comment instead of posting another', async () => {
@@ -191,7 +172,7 @@ describe('run', () => {
   })
 
   it('reports permission errors with a hint and still attempts other actions', async () => {
-    const { core, mock } = fakeCore({ ...TOKEN, close: 'true' })
+    const { core, mock } = fakeCore(TOKEN)
     const { octokit, rest } = fakeOctokit()
     rest.issues.addLabels.mockRejectedValueOnce(new HttpError(403, 'Resource not accessible by integration'))
     const context = {
@@ -200,7 +181,7 @@ describe('run', () => {
       payload: { action: 'opened', pull_request: { number: 3, title: 't', body: MALICIOUS, user: { login: 'x' } } }
     }
     await run(deps(context, core, octokit))
-    expect(rest.pulls.update).toHaveBeenCalled()
+    expect(rest.issues.createComment).toHaveBeenCalled()
     expect(mock.setFailed).toHaveBeenCalledWith(expect.stringContaining('pull_request_target'))
   })
 

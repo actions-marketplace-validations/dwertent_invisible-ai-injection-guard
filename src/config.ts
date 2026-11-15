@@ -9,8 +9,6 @@ export interface Config {
   label: string
   labelColor: string
   labelDescription: string
-  close: boolean
-  closeOnComment: boolean
   hideComment: boolean
   hideCommentReason: string
   comment: boolean
@@ -117,8 +115,6 @@ export function readConfig(io: InputReader): Config {
     label,
     labelColor: labelColor.toLowerCase(),
     labelDescription: str('label-description', 'Contains content hidden from human readers').slice(0, 100),
-    close: bool('close', false),
-    closeOnComment: bool('close-on-comment', false),
     hideComment: bool('hide-comment', true),
     hideCommentReason,
     comment: bool('comment', true),

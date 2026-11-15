@@ -1,5 +1,5 @@
 name: Invisible AI Injection Guard
-description: Detect content hidden from humans but visible to AI agents in issues, PRs and comments, then label, hide or close them.
+description: Detect content hidden from humans but visible to AI agents in issues, PRs and comments, then label them.
 author: dwertent
 branding:
   icon: eye-off
@@ -7,7 +7,7 @@ branding:
 
 inputs:
   github-token:
-    description: Token used to read templates and to label, comment on and close issues and pull requests.
+    description: Token used to read templates, label issues and pull requests, and comment on or hide comments.
     default: ${{ github.token }}
   add-label:
     description: Add a label when hidden content is detected.
@@ -21,14 +21,6 @@ inputs:
   label-description:
     description: Description used when the label is created.
     default: Contains content hidden from human readers
-  close:
-    description: Close the issue (as "not planned") or pull request when hidden content is detected.
-    default: 'false'
-  close-on-comment:
-    description: >-
-      Also close the issue or pull request when a comment on it contains hidden content. Off by default because it
-      lets anyone who can comment close the item.
-    default: 'false'
   hide-comment:
     description: Hide (minimize) a comment that contains hidden content. Pull request reviews cannot be hidden.
     default: 'true'
@@ -42,7 +34,7 @@ inputs:
     description: Include short, escaped excerpts of the hidden content in the comment.
     default: 'true'
   remove-label-when-clean:
-    description: Remove the label when a later edit no longer contains hidden content. Closed items are not reopened.
+    description: Remove the label when a later edit no longer contains hidden content.
     default: 'true'
   min-severity:
     description: Lowest severity that triggers the configured actions (low, medium or high).

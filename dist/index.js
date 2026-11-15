@@ -26454,8 +26454,6 @@ function readConfig(io) {
     label,
     labelColor: labelColor.toLowerCase(),
     labelDescription: str2("label-description", "Contains content hidden from human readers").slice(0, 100),
-    close: bool("close", false),
-    closeOnComment: bool("close-on-comment", false),
     hideComment: bool("hide-comment", true),
     hideCommentReason,
     comment: bool("comment", true),
@@ -26530,8 +26528,8 @@ function maskCode(text) {
   for (const line of lines) {
     if (fence) {
       out.push(blank(line));
-      const close2 = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(line);
-      if (close2?.[1] && close2[1][0] === fence.char && close2[1].length >= fence.length) {
+      const close = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(line);
+      if (close?.[1] && close[1][0] === fence.char && close[1].length >= fence.length) {
         fence = void 0;
       }
       continue;
@@ -26748,8 +26746,8 @@ function detectHiddenHtml(masked, options) {
     const hiddenAttr = /(?:^|\s)hidden(?:\s|=|$)/iu.test(attrs) || /aria-hidden\s*=\s*["']?true/iu.test(attrs);
     if (hiddenAttr || HIDING_STYLE.test(styleValue)) {
       const after = masked.slice(m.index + m[0].length);
-      const close2 = after.search(new RegExp(`</${tag}\\s*>`, "iu"));
-      const content = textOf(after.slice(0, close2 === -1 ? 500 : Math.min(close2, 2e3)));
+      const close = after.search(new RegExp(`</${tag}\\s*>`, "iu"));
+      const content = textOf(after.slice(0, close === -1 ? 500 : Math.min(close, 2e3)));
       if (content !== "") {
         const { severity, signals } = classify(content, options, "medium");
         findings.push({
@@ -26905,7 +26903,6 @@ function resolveTarget(context3) {
     owner: context3.repo.owner,
     repo: context3.repo.repo,
     number: Number(parent["number"]),
-    state: str(parent, "state", "open"),
     labels: labels.map((l) => typeof l === "string" ? l : obj(l)?.["name"]).filter((l) => typeof l === "string")
   };
   let source = parent;
@@ -26959,20 +26956,6 @@ async function removeLabel(octokit, target, name) {
   } catch (error2) {
     if (statusOf(error2) === 404) return false;
     throw error2;
-  }
-}
-async function close(octokit, target) {
-  const { owner, repo, number } = target;
-  if (target.kind === "issue") {
-    await octokit.rest.issues.update({
-      owner,
-      repo,
-      issue_number: number,
-      state: "closed",
-      state_reason: "not_planned"
-    });
-  } else {
-    await octokit.rest.pulls.update({ owner, repo, pull_number: number, state: "closed" });
   }
 }
 async function findReportComment(octokit, target) {
@@ -27439,12 +27422,6 @@ async function execute(deps) {
         "hide the comment",
         async () => await hideComment(octokit, target, config.hideCommentReason) ? "hid the comment" : void 0
       );
-    }
-    if ((isComment ? config.closeOnComment : config.close) && target.state === "open") {
-      await attempt(`close ${item}`, async () => {
-        await close(octokit, target);
-        return `closed this ${target.kind === "issue" ? "issue" : "pull request"}`;
-      });
     }
     if (config.comment) {
       await attempt("post the report comment", async () => {

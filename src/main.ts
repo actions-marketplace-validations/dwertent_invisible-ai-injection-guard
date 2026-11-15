@@ -5,15 +5,7 @@ import * as github from '@actions/github'
 import type { Config } from './config.js'
 import { ConfigError, readConfig } from './config.js'
 import type { EventContext, Octokit, Target } from './github.js'
-import {
-  addLabel,
-  close,
-  findReportComment,
-  hideComment,
-  removeLabel,
-  resolveTarget,
-  upsertReportComment
-} from './github.js'
+import { addLabel, findReportComment, hideComment, removeLabel, resolveTarget, upsertReportComment } from './github.js'
 import { buildReportComment, buildResolvedComment, formatFinding, formatLocation } from './report.js'
 import { DEFAULT_SCAN_OPTIONS, scan } from './scan.js'
 import { loadTemplateSnippets, messageOf, statusOf } from './templates.js'
@@ -140,12 +132,6 @@ async function execute(deps: Dependencies): Promise<RunResult | undefined> {
       await attempt('hide the comment', async () =>
         (await hideComment(octokit, target, config.hideCommentReason)) ? 'hid the comment' : undefined
       )
-    }
-    if ((isComment ? config.closeOnComment : config.close) && target.state === 'open') {
-      await attempt(`close ${item}`, async () => {
-        await close(octokit, target)
-        return `closed this ${target.kind === 'issue' ? 'issue' : 'pull request'}`
-      })
     }
     if (config.comment) {
       await attempt('post the report comment', async () => {

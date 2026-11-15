@@ -3,6 +3,14 @@
 All notable changes to this project are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-11-14
+
+### Removed
+
+- The `close` and `close-on-comment` inputs. The action now only flags content (label, report comment and hiding
+  comments) and never closes issues or pull requests. To close flagged items, add a separate job that reads the
+  `detected` output; the README has an example.
+
 ## [1.1.0] - 2026-11-13
 
 ### Added

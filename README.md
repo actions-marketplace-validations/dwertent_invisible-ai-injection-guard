@@ -3,8 +3,12 @@
 [![CI](https://github.com/dwertent/invisible-ai-injection-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/dwertent/invisible-ai-injection-guard/actions/workflows/ci.yml)
 
 A GitHub Action that detects content in issue and pull request titles, descriptions and comments that is **hidden
-from people reading them on GitHub but fully visible to automated tools**, then labels, comments on, hides and/or
-closes the issue, pull request or comment.
+from people reading them on GitHub but fully visible to automated tools**, then labels the issue or pull request,
+reports the findings and hides offending comments.
+
+The action only flags content. It never closes issues or pull requests: deciding what to do with a flagged item is a
+separate responsibility, which you can give to another job or workflow (see
+[Close flagged items in a separate job](#close-flagged-items-in-a-separate-job)).
 
 ## Why
 
@@ -60,7 +64,7 @@ on:
 permissions:
   contents: read # read issue/PR templates
   issues: write # labels, comments, hiding issue comments
-  pull-requests: write # labels, comments, closing pull requests, hiding review comments
+  pull-requests: write # labels, comments, hiding review comments
 
 jobs:
   scan:
@@ -84,8 +88,6 @@ hidden content, the action:
   pick another reason). Review bodies cannot be hidden through the API, so they are only reported.
 - **adds the label** to the issue or pull request the comment belongs to (`add-label`).
 - **posts a report** that links to the comment, without mentioning its author (`comment`).
-- **does not close the issue or pull request** unless `close-on-comment: true`. This is deliberately separate from
-  `close`: otherwise anyone who can comment could close any open item.
 
 If the comment is later edited to remove the hidden content, its report is marked as resolved. The label stays
 (the item may have been labeled for other reasons) and the comment stays hidden until a maintainer unhides it.
@@ -99,26 +101,55 @@ If the comment is later edited to remove the hidden content, its report is marke
     comment: false
 ```
 
-### Close only
+### Close flagged items in a separate job
+
+Closing is not part of this action. To close flagged items automatically, run a second job that reads the action's
+`detected` output, so the decision to close lives in your workflow, where you can see and change it:
 
 ```yaml
-- uses: dwertent/invisible-ai-injection-guard@v1
-  with:
-    add-label: false
-    close: true
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    outputs:
+      detected: ${{ steps.guard.outputs.detected }}
+    steps:
+      - id: guard
+        uses: dwertent/invisible-ai-injection-guard@v1
+
+  close:
+    needs: scan
+    # Close only when the description is flagged, not when a comment is: otherwise anyone who can comment could
+    # close any open item.
+    if: needs.scan.outputs.detected == 'true' && (github.event_name == 'issues' || github.event_name == 'pull_request_target')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+        run: |
+          if [ "$EVENT" = issues ]; then
+            gh issue close "$NUMBER" --reason "not planned"
+          else
+            gh pr close "$NUMBER"
+          fi
 ```
 
-Issues are closed as "not planned". Closed items are not reopened automatically after a clean edit.
+GitHub has no token permission that allows labeling but not closing: `issues: write` and `pull-requests: write`
+cover both. Removing closing from the action means it has no code path that closes anything, but the token you give
+it could still be used to close items, so keep granting only the permissions listed above.
 
-### Label and close
-
-```yaml
-- uses: dwertent/invisible-ai-injection-guard@v1
-  with:
-    label: needs-security-review
-    close: true
-    min-severity: high
-```
+A workflow triggered by the `labeled` event does not work with the default token: GitHub does not start new
+workflow runs for events caused by `GITHUB_TOKEN`. Use the job above, or have this action label with a GitHub App
+token if you prefer a separate label-driven workflow.
 
 ### Gate an AI agent on the result
 
@@ -144,13 +175,11 @@ jobs:
 
 | Name                         | Default                                      | Description                                                                                                      |
 | ---------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `github-token`               | `${{ github.token }}`                        | Token used to read templates and to label, comment on and close items.                                           |
+| `github-token`               | `${{ github.token }}`                        | Token used to read templates, label items, and post or hide comments.                                            |
 | `add-label`                  | `true`                                       | Add a label when hidden content is detected.                                                                     |
 | `label`                      | `suspicious-hidden-content`                  | Label name. Created if it does not exist.                                                                        |
 | `label-color`                | `b60205`                                     | Hex color used when creating the label.                                                                          |
 | `label-description`          | `Contains content hidden from human readers` | Description used when creating the label.                                                                        |
-| `close`                      | `false`                                      | Close the issue (as not planned) or pull request when its title or description contains hidden content.          |
-| `close-on-comment`           | `false`                                      | Also close the issue or pull request when one of its comments contains hidden content.                           |
 | `hide-comment`               | `true`                                       | Hide (minimize) comments that contain hidden content.                                                            |
 | `hide-comment-reason`        | `spam`                                       | Reason shown on hidden comments: `spam`, `abuse`, `off-topic`, `outdated`, `duplicate` or `resolved`.            |
 | `comment`                    | `true`                                       | Post (and keep updated) a comment that lists the findings.                                                       |

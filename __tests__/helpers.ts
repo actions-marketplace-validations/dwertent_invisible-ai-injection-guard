@@ -67,7 +67,6 @@ export function fakeOctokit(repo: Partial<FakeRepo> = {}) {
       }),
       addLabels: vi.fn(() => Promise.resolve({ data: [] })),
       removeLabel: vi.fn(() => Promise.resolve({ data: [] })),
-      update: vi.fn(() => Promise.resolve({ data: {} })),
       listComments: vi.fn(),
       createComment: vi.fn(({ body }: { body: string }) => {
         state.comments.push({ id: nextId++, body, user: { login: 'github-actions[bot]', type: 'Bot' } })
@@ -78,8 +77,7 @@ export function fakeOctokit(repo: Partial<FakeRepo> = {}) {
         if (c) c.body = body
         return Promise.resolve({ data: {} })
       })
-    },
-    pulls: { update: vi.fn(() => Promise.resolve({ data: {} })) }
+    }
   }
   const paginate = vi.fn(() => Promise.resolve([...state.comments]))
   const graphql = vi.fn(() => Promise.resolve({ minimizeComment: { minimizedComment: { isMinimized: true } } }))

@@ -83,7 +83,7 @@ describe('resolveTarget for comments', () => {
 })
 
 describe('run on comments', () => {
-  it('hides the comment, labels the item and reports, but does not close by default', async () => {
+  it('hides the comment, labels the item and reports', async () => {
     const { core, outputs } = fakeCore(TOKEN)
     const { octokit, rest, graphql, state } = fakeOctokit()
     await run(deps(commentEvent(MALICIOUS), core, octokit))
@@ -96,24 +96,11 @@ describe('run on comments', () => {
       classifier: 'SPAM'
     })
     expect(rest.issues.addLabels).toHaveBeenCalled()
-    expect(rest.issues.update).not.toHaveBeenCalled()
     expect(rest.repos.getContent).not.toHaveBeenCalled()
     const report = state.comments[0]?.body ?? ''
     expect(report).toContain('<!-- invisible-ai-injection-guard:report:issue_comment-555 -->')
     expect(report).toContain('[This comment](https://github.com/acme/widgets/issues/7#issuecomment-555) by `commenter`')
     expect(report).toContain('hid the comment')
-  })
-
-  it('closes the item only when close-on-comment is enabled', async () => {
-    const closeOnly = fakeCore({ ...TOKEN, close: 'true' })
-    const first = fakeOctokit()
-    await run(deps(commentEvent(MALICIOUS), closeOnly.core, first.octokit))
-    expect(first.rest.issues.update).not.toHaveBeenCalled()
-
-    const closeOnComment = fakeCore({ ...TOKEN, 'close-on-comment': 'true' })
-    const second = fakeOctokit()
-    await run(deps(commentEvent(MALICIOUS, { onPullRequest: true }), closeOnComment.core, second.octokit))
-    expect(second.rest.pulls.update).toHaveBeenCalledWith(expect.objectContaining({ pull_number: 7, state: 'closed' }))
   })
 
   it('respects hide-comment and hide-comment-reason', async () => {
